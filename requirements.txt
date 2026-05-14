@@ -1,6 +1,6 @@
 flask
 yfinance
 pandas
-pandas-ta
+pandas_ta
 requests
 gunicorn
