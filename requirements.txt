@@ -1,6 +1,6 @@
 flask
-python-telegram-bot
 yfinance
 pandas
 pandas_ta
+requests
 gunicorn
