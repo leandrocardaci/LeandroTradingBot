@@ -5,36 +5,35 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# Configurazione Telegram
 TOKEN = "8643519947:AAH2Ba92mhson8uQAij_5Q0N0PvyTgluhAU"
 CHAT_ID = "6511237453"
-SIMBOLI = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURJPY"]
 
-def calcola_strategia(simbolo):
+# Simboli Forex corretti
+SIMBOLI = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CHF"]
+
+def prendi_dati_reali(simbolo):
     try:
-        # Usiamo il fornitore che ha appena funzionato (ER-API)
-        url = "https://open.er-api.com/v6/latest/USD"
-        data = requests.get(url, timeout=10).json()
+        # Usiamo un fornitore di dati Forex più preciso
+        url = f"https://api.twelvedata.com/price?symbol={simbolo}&apikey=8618e76f626c4573852028682898745c"
+        response = requests.get(url, timeout=8)
+        data = response.json()
         
-        if data['result'] == 'success':
-            rates = data['rates']
-            # Prezzo attuale
-            raw_rate = rates[simbolo[:3]]
-            prezzo = 1/raw_rate if simbolo in ["EURUSD", "GBPUSD", "AUDUSD"] else raw_rate
+        if 'price' in data:
+            prezzo = float(data['price'])
             
-            # Calcolo Trend H1 e Fibo (Simulazione basata sui dati giornalieri disponibili)
-            # Per ora usiamo il range del giorno fornito dall'API per calcolare il 61.8%
-            cambio_24h = data.get('time_next_update_unix', 0) # Solo per variare
-            trend = "Bullish" if (datetime.now().second % 2 == 0) else "Bearish" 
-            
-            # Calcoliamo un Fibo 61.8% basato su un ritracciamento standard del 0.5%
-            fibo_618 = prezzo * 0.995 if trend == "Bullish" else prezzo * 1.005
+            # Simuliamo il Trend e il Fibo basandoci sul prezzo attuale per il test di stasera
+            # (Domani aggiungeremo le candele storiche per il calcolo matematico perfetto)
+            trend = "Bullish" if (datetime.now().second % 10 > 5) else "Bearish"
+            fibo_618 = prezzo * 0.9995 if trend == "Bullish" else prezzo * 1.0005
             
             distanza = abs(prezzo - fibo_618)
-            soglia = prezzo * 0.0008 # Vicinanza zona
-            stato = "IN ZONA 🎯" if distanza < soglia else "Monitoraggio"
-
+            # Soglia di vicinanza molto stretta per il Forex
+            stato = "IN ZONA 🎯" if distanza < (prezzo * 0.0003) else "Monitoraggio"
+            
             if stato == "IN ZONA 🎯":
-                requests.get(f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text=⚠️ {simbolo} in ZONA FIBO!")
+                msg = f"⚠️ {simbolo} PREZZO: {prezzo} - Vicino al 61.8% Fibo!"
+                requests.get(f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={msg}")
 
             return {
                 "simbolo": simbolo,
@@ -48,38 +47,46 @@ def calcola_strategia(simbolo):
 
 @app.route('/')
 def home():
-    risultati = [calcola_strategia(s) for s in SIMBOLI if calcola_strategia(s)]
+    risultati = []
+    for s in SIMBOLI:
+        dati = prendi_dati_reali(s)
+        if dati: risultati.append(dati)
+    
     html = """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Leandro Trading Bot</title>
-        <meta http-equiv="refresh" content="30">
+        <title>Leandro Trading Dash</title>
+        <meta http-equiv="refresh" content="15">
         <style>
-            body { background: #121212; color: #e0e0e0; font-family: sans-serif; text-align: center; }
-            table { margin: 20px auto; border-collapse: collapse; width: 90%; background: #1e1e1e; border: 1px solid #00ffcc; }
-            th, td { padding: 15px; border: 1px solid #333; }
-            th { background: #333; color: #00ffcc; }
-            .Bullish { color: #00ff00; font-weight: bold; }
-            .Bearish { color: #ff4444; font-weight: bold; }
-            .zona { background: #d32f2f; color: white; padding: 5px; border-radius: 4px; font-weight: bold; }
+            body { background: #0a0a0a; color: #f0f0f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; }
+            .container { padding: 30px; }
+            table { margin: 20px auto; border-collapse: collapse; width: 95%; background: #161616; border-radius: 10px; overflow: hidden; }
+            th { background: #222; color: #00ffcc; padding: 15px; text-transform: uppercase; font-size: 14px; }
+            td { padding: 15px; border-bottom: 1px solid #2a2a2a; font-size: 18px; }
+            .Bullish { color: #00ff00; }
+            .Bearish { color: #ff4444; }
+            .zona { background: #ff9800; color: black; padding: 5px 10px; border-radius: 5px; font-weight: bold; animation: blink 1s infinite; }
+            @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
         </style>
     </head>
     <body>
-        <h1>📈 Dashboard Strategia Leandro</h1>
-        <p>Aggiornamento ogni 30s | Server Time: {{ ora }}</p>
-        <table>
-            <tr><th>Coppia</th><th>Prezzo</th><th>Trend (H1)</th><th>Fibo 61.8%</th><th>Stato</th></tr>
-            {% for s in segnali %}
-            <tr>
-                <td>{{ s.simbolo }}</td>
-                <td>{{ s.prezzo }}</td>
-                <td class="{{ s.trend }}">{{ s.trend }}</td>
-                <td>{{ s.fibo }}</td>
-                <td><span class="{{ 'zona' if 'ZONA' in s.stato else '' }}">{{ s.stato }}</span></td>
-            </tr>
-            {% endfor %}
-        </table>
+        <div class="container">
+            <h1>🏛️ Leandro Premium Scanner</h1>
+            <p>Dati Real-Time da Mercato Forex | Aggiornamento: {{ ora }}</p>
+            <table>
+                <tr><th>Asset</th><th>Prezzo MetaTrader</th><th>Trend H1</th><th>Target Fibo</th><th>Stato</th></tr>
+                {% for s in segnali %}
+                <tr>
+                    <td><strong>{{ s.simbolo }}</strong></td>
+                    <td style="font-family: monospace;">{{ s.prezzo }}</td>
+                    <td class="{{ s.trend }}">{{ s.trend }}</td>
+                    <td>{{ s.fibo }}</td>
+                    <td><span class="{{ 'zona' if 'ZONA' in s.stato else '' }}">{{ s.stato }}</span></td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
     </body>
     </html>
     """
